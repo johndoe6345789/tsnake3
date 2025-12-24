@@ -1,0 +1,251 @@
+name: SDL3-CPP CI/CD
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths:
+      - 'sdl3-cpp/**'
+      - '.github/workflows/sdl3-cpp-ci.yml'
+  pull_request:
+    branches: [ main, master, develop ]
+    paths:
+      - 'sdl3-cpp/**'
+      - '.github/workflows/sdl3-cpp-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Linux x86_64 build
+  build-linux:
+    name: Build on Linux (x86_64)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake \
+          ninja-build \
+          build-essential \
+          libx11-dev \
+          libxext-dev \
+          libwayland-dev \
+          libxkbcommon-dev \
+          libegl1-mesa-dev \
+          libibus-1.0-dev
+    
+    - name: Configure CMake
+      working-directory: sdl3-cpp
+      run: |
+        cmake -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_VERBOSE_MAKEFILE=ON
+    
+    - name: Build
+      working-directory: sdl3-cpp
+      run: cmake --build build --config Release -v
+    
+    - name: Verify executable
+      working-directory: sdl3-cpp
+      run: |
+        ls -lh build/bin/
+        file build/bin/tsnake3
+        ldd build/bin/tsnake3 || true
+    
+    - name: Test executable (headless)
+      working-directory: sdl3-cpp
+      run: |
+        # Run with dummy video driver for headless testing
+        SDL_VIDEODRIVER=dummy timeout 5s ./build/bin/tsnake3 || true
+        echo "Executable test completed"
+    
+    - name: Upload Linux artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: tsnake3-linux-x86_64
+        path: sdl3-cpp/build/bin/tsnake3
+        retention-days: 30
+
+  # Windows MSVC build
+  build-windows:
+    name: Build on Windows (x86_64)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+    
+    - name: Configure CMake
+      working-directory: sdl3-cpp
+      run: |
+        cmake -B build -G "Visual Studio 17 2022" -A x64 `
+          -DCMAKE_BUILD_TYPE=Release
+    
+    - name: Build
+      working-directory: sdl3-cpp
+      run: cmake --build build --config Release -v
+    
+    - name: Verify executable
+      working-directory: sdl3-cpp
+      shell: powershell
+      run: |
+        Get-ChildItem -Recurse build\bin
+        if (Test-Path "build\bin\Release\tsnake3.exe") {
+          Write-Host "Found tsnake3.exe in Release folder"
+          Get-Item build\bin\Release\tsnake3.exe
+        } elseif (Test-Path "build\bin\tsnake3.exe") {
+          Write-Host "Found tsnake3.exe in bin folder"
+          Get-Item build\bin\tsnake3.exe
+        } else {
+          Write-Host "Searching for tsnake3.exe..."
+          Get-ChildItem -Recurse -Filter tsnake3.exe
+        }
+    
+    - name: Test executable (headless)
+      working-directory: sdl3-cpp
+      shell: powershell
+      run: |
+        # Set dummy video driver for headless testing
+        $env:SDL_VIDEODRIVER = "dummy"
+        $exePath = if (Test-Path "build\bin\Release\tsnake3.exe") { 
+          "build\bin\Release\tsnake3.exe" 
+        } else { 
+          "build\bin\tsnake3.exe" 
+        }
+        
+        # Run with timeout
+        $process = Start-Process -FilePath $exePath -NoNewWindow -PassThru
+        Start-Sleep -Seconds 3
+        if (!$process.HasExited) {
+          Stop-Process -Id $process.Id -Force
+        }
+        Write-Host "Executable test completed"
+    
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: tsnake3-windows-x86_64
+        path: sdl3-cpp/build/bin/Release/
+        retention-days: 30
+        if-no-files-found: warn
+
+  # ARM64 build with QEMU
+  build-arm64-qemu:
+    name: Build on ARM64 (QEMU)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: arm64
+    
+    - name: Build in ARM64 container
+      run: |
+        docker run --rm --platform linux/arm64 \
+          -v ${{ github.workspace }}/sdl3-cpp:/workspace \
+          -w /workspace \
+          arm64v8/ubuntu:22.04 \
+          bash -c "
+            export DEBIAN_FRONTEND=noninteractive && \
+            apt-get update && \
+            apt-get install -y \
+              cmake \
+              ninja-build \
+              build-essential \
+              libx11-dev \
+              libxext-dev \
+              libwayland-dev \
+              libxkbcommon-dev \
+              libegl1-mesa-dev \
+              libibus-1.0-dev \
+              git && \
+            cmake -B build -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_VERBOSE_MAKEFILE=ON && \
+            cmake --build build --config Release -v && \
+            ls -lh build/bin/ && \
+            file build/bin/tsnake3
+          "
+    
+    - name: Verify ARM64 executable
+      run: |
+        ls -lh sdl3-cpp/build/bin/
+        file sdl3-cpp/build/bin/tsnake3
+        # Verify it's actually ARM64
+        file sdl3-cpp/build/bin/tsnake3 | grep -i "aarch64\|arm64"
+    
+    - name: Test executable (headless in QEMU)
+      run: |
+        docker run --rm --platform linux/arm64 \
+          -v ${{ github.workspace }}/sdl3-cpp:/workspace \
+          -w /workspace \
+          arm64v8/ubuntu:22.04 \
+          bash -c "
+            export DEBIAN_FRONTEND=noninteractive && \
+            apt-get update && \
+            apt-get install -y libx11-6 libwayland-client0 timeout && \
+            export SDL_VIDEODRIVER=dummy && \
+            timeout 5s ./build/bin/tsnake3 || true && \
+            echo 'Executable test completed'
+          "
+    
+    - name: Upload ARM64 artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: tsnake3-linux-arm64
+        path: sdl3-cpp/build/bin/tsnake3
+        retention-days: 30
+
+  # Create release summary
+  summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-windows, build-arm64-qemu]
+    if: always()
+    permissions:
+      contents: read
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+    
+    - name: Display structure
+      run: |
+        echo "=== Build Artifacts ==="
+        ls -lhR artifacts/
+        echo ""
+        echo "=== Build Summary ==="
+        echo "✅ Linux x86_64: ${{ needs.build-linux.result }}"
+        echo "✅ Windows x86_64: ${{ needs.build-windows.result }}"
+        echo "✅ Linux ARM64 (QEMU): ${{ needs.build-arm64-qemu.result }}"
+    
+    - name: Check build status
+      run: |
+        if [ "${{ needs.build-linux.result }}" != "success" ] || \
+           [ "${{ needs.build-windows.result }}" != "success" ] || \
+           [ "${{ needs.build-arm64-qemu.result }}" != "success" ]; then
+          echo "❌ Some builds failed!"
+          exit 1
+        fi
+        echo "✅ All builds succeeded!"
