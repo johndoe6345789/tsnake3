@@ -2,6 +2,7 @@
 build/
 cmake-build-*/
 out/
+_codeql_*/
 
 # CMake
 CMakeCache.txt
@@ -15,8 +16,10 @@ Makefile
 *.out
 *.app
 *.so
+*.so.*
 *.dylib
 *.dll
+*.a
 
 # IDE files
 .vscode/
