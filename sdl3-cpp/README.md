@@ -24,6 +24,9 @@ T-Snake 3 is a classic snake game where you control a snake that grows as it eat
 - CMake 3.16 or higher
 - C++17 compatible compiler (GCC, Clang, or MSVC)
 - SDL3 (automatically fetched if not found)
+- For running with a graphical display: X11 or Wayland development libraries (on Linux)
+
+**Note:** The build system is configured to work in headless environments for CI/CD purposes. It uses SDL3's dummy video driver when X11/Wayland are not available.
 
 ### Build Instructions
 
