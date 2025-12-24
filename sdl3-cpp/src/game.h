@@ -4,6 +4,7 @@
 #include <SDL3/SDL.h>
 #include <vector>
 #include <memory>
+#include <random>
 
 // Direction enumeration (similar to VB6 Dir enum)
 enum class Direction {
@@ -90,6 +91,10 @@ private:
     
     // Score
     int score;
+    
+    // Random number generator for food spawning
+    std::random_device rd;
+    std::mt19937 gen;
 };
 
 #endif // GAME_H

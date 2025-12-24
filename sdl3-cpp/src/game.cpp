@@ -9,7 +9,8 @@ Game::Game()
     , currentDirection(Direction::Right)
     , nextDirection(Direction::Right)
     , lastUpdateTime(0)
-    , score(0) {
+    , score(0)
+    , gen(rd()) {
 }
 
 Game::~Game() {
@@ -217,9 +218,6 @@ bool Game::checkCollision() {
 }
 
 void Game::spawnFood() {
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    
     std::uniform_int_distribution<> distX(0, (WINDOW_WIDTH / SEGMENT_SIZE) - 1);
     std::uniform_int_distribution<> distY(0, (WINDOW_HEIGHT / SEGMENT_SIZE) - 1);
     
