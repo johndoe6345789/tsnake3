@@ -221,8 +221,13 @@ void Game::spawnFood() {
     std::uniform_int_distribution<> distX(0, (WINDOW_WIDTH / SEGMENT_SIZE) - 1);
     std::uniform_int_distribution<> distY(0, (WINDOW_HEIGHT / SEGMENT_SIZE) - 1);
     
+    // Safety check: if snake is too large, game should end anyway
+    // but add a max iteration limit to prevent infinite loop
+    const int MAX_ATTEMPTS = 1000;
+    int attempts = 0;
+    
     bool validPosition = false;
-    while (!validPosition) {
+    while (!validPosition && attempts < MAX_ATTEMPTS) {
         food.x = distX(gen) * SEGMENT_SIZE;
         food.y = distY(gen) * SEGMENT_SIZE;
         
@@ -234,6 +239,14 @@ void Game::spawnFood() {
                 break;
             }
         }
+        attempts++;
+    }
+    
+    // If we couldn't find a valid position after MAX_ATTEMPTS,
+    // the player has essentially won (filled most of the board)
+    if (!validPosition) {
+        std::cout << "Congratulations! You filled the board! Final Score: " << score << std::endl;
+        running = false;
     }
 }
 
