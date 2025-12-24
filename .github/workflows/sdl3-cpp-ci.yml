@@ -131,10 +131,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: tsnake3-windows-x86_64
-        path: |
-          sdl3-cpp/build/bin/Release/tsnake3.exe
-          sdl3-cpp/build/bin/Release/*.dll
+        path: sdl3-cpp/build/bin/Release/
         retention-days: 30
+        if-no-files-found: warn
 
   # ARM64 build with QEMU
   build-arm64-qemu:
@@ -156,8 +155,8 @@ jobs:
     - name: Build in ARM64 container
       run: |
         docker run --rm --platform linux/arm64 \
-          -v ${{ github.workspace }}:/workspace \
-          -w /workspace/sdl3-cpp \
+          -v ${{ github.workspace }}/sdl3-cpp:/workspace \
+          -w /workspace \
           arm64v8/ubuntu:22.04 \
           bash -c "
             export DEBIAN_FRONTEND=noninteractive && \
